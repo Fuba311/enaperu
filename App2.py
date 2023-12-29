@@ -19,11 +19,20 @@ def safe_convert_to_float(value):
     except ValueError:
         return 0.0
 
+# Use the raw URL of the .dta file
+raw_url = 'https://github.com/Fuba311/enaperu/raw/main/02_Cap200ab.dta'
+raw_url2 = 'https://github.com/Fuba311/enaperu/raw/main/16_Cap900.dta'
+raw_url3 = 'https://github.com/Fuba311/enaperu/raw/main/15_Cap800.dta'
+raw_url4 = 'https://github.com/Fuba311/enaperu/raw/main/14_Cap700.dta'
+raw_url5 = 'https://github.com/Fuba311/enaperu/raw/main/25_Cap1200d.dta'
+raw_url6 = 'https://github.com/Fuba311/enaperu/raw/main/04_Cap200b_1.dta'
+raw_url7 = 'https://github.com/Fuba311/enaperu/raw/main/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp'
+raw_url8 = 'https://github.com/Fuba311/enaperu/raw/main/17_Cap1000.dta'
 
-# Carga de datos
-df = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\DashCap200\\02_Cap200ab.dta')
-df_cap900 = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\DashCap900\\16_Cap900.dta')
-df_cap800 = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1751 - Asociatividad\\15_Cap800.dta')
+# Read the .dta file directly into a pandas dataframe
+df = pd.read_stata(raw_url)
+df_cap900 = pd.read_stata(raw_url2)
+df_cap800 = pd.read_stata(raw_url3)
 
 # Group by CONGLOMERADO, NSELUA, and UA, and sum the P217_SUP_ha
 grouped_df = df.groupby(['CONGLOMERADO', 'NSELUA', 'UA'])['P217_SUP_ha'].sum().reset_index()
@@ -55,24 +64,24 @@ df_grouped = df_with_dummies.groupby(['CONGLOMERADO', 'NSELUA', 'UA']).sum().res
 df_cap800 = pd.merge(df_cap800, df_grouped, on=['CONGLOMERADO', 'NSELUA', 'UA'], how='left')
 
 # Load additional DataFrame
-df_cap700 = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1750 - Servicios Extensión agraria\\14_Cap700.dta')
+df_cap700 = pd.read_stata(raw_url4)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
 df_cap700 = pd.merge(df_cap700, relevant_columns_df, on=['CONGLOMERADO', 'NSELUA', 'UA'], how='left')
-gdf = gpd.read_file('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\DashCap900\\DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp')
+gdf = gpd.read_file(raw_url7)
 gdf = gdf.to_crs(epsg=4326)  # Ensure the GeoDataFrame is in WGS 84 coordinate system
 geojson = json.loads(gdf.to_json())
 
 # Load new data
-df_cap1200d = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1760 - Características unidad agropecuaria en últimos 12 meses - maquinaria y equipo\\25_Cap1200d.dta')
+df_cap1200d = pd.read_stata(raw_url5)
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha', 'FACTOR']].drop_duplicates()
 # Outer merge with df_cap1200d
 merged_df2 = pd.merge(df_cap1200d, relevant_columns_df, on=['CONGLOMERADO', 'NSELUA', 'UA', 'FACTOR'], how='outer')
 #merged_df2.to_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1760 - Características unidad agropecuaria en últimos 12 meses - maquinaria y equipo\\test.dta')
 
 # Load additional data
-df_prob = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1740 - Pérdida de Producción o superficie sembrada\\04_Cap200b_1.dta')
+df_prob = pd.read_stata(raw_url6)
 
 # Rename 'P224B_NOM' to 'P204_NOM' in df_prob for merging
 df_prob.rename(columns={'P224B_NOM': 'P204_NOM'}, inplace=True)
@@ -85,7 +94,7 @@ loss_columns = ['P224E_1', 'P224E_2', 'P224E_3', 'P224E_4', 'P224E_5', 'P224E_6'
 df3[loss_columns] = df3[loss_columns].fillna('Pase')
 
 # Load additional DataFrame
-df_cap1000 = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1753 - Costo poducción actividad agropecuaria\\17_Cap1000.dta')
+df_cap1000 = pd.read_stata(raw_url8)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
@@ -317,6 +326,7 @@ def calcular_precio_promedio_ponderado(df, cultivo, nivel_agregacion=None):
 
 # Inicializar la aplicación Dash con un tema de Bootstrap
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
 
 app.layout = dbc.Container([
     dbc.Row(dbc.Col(html.H1("Visualizador Interactivo ENA 2022 Perú",
@@ -328,7 +338,7 @@ app.layout = dbc.Container([
                         }),
                 width=12, className="mb-4 mt-4")),
 
-    dbc.Row(dbc.Col(html.P("Por Andrés Fuica",
+    dbc.Row(dbc.Col(html.P("Por Andrés Fuica (andresfuba@uc.cl)",
                         style={
                             'textAlign': 'center',
                             'fontFamily': '"Century Gothic", Arial, sans-serif',
@@ -337,7 +347,7 @@ app.layout = dbc.Container([
                         }),
                 width=12, className="mb-4")),
 
-    dbc.Row(dbc.Col(html.P("Para todos los gráficos, puede filtrar por Departamento, Provincia, Distrito y, solo para algunos, por Cultivo específico. Todos los gráficos junto con los datos utilizados para generarlos son descargables.",
+    dbc.Row(dbc.Col(html.P("Para todos los gráficos, puede filtrar por Región, Departamento, Provincia, Distrito y, solo para algunos, por Cultivo específico. Todos los gráficos junto con los datos utilizados para generarlos son descargables.",
                       style={
                           'textAlign': 'center',
                           'fontFamily': '"Century Gothic", Arial, sans-serif',
@@ -3208,5 +3218,5 @@ def update_dias_contribution_table(departamento, provincia, distrito, region):
     return fig
 
 # Ejecutar aplicación
-if __name__ == '__main__':
-    app.run_server(debug=True)
+#if __name__ == '__main__':
+    #app.run_server(debug=True)

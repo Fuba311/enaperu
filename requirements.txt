@@ -1,4 +1,3 @@
-json
 pandas
 plotly
 dash==2.7.0
