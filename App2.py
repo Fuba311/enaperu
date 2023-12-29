@@ -21,9 +21,9 @@ def safe_convert_to_float(value):
 
 
 # Carga de datos
-df = pd.read_stata('enaperu/02_Cap200ab.dta')
-df_cap900 = pd.read_stata('enaperu/16_Cap900.dta')
-df_cap800 = pd.read_stata('enaperu/15_Cap800.dta')
+df = pd.read_stata('enaperu\\02_Cap200ab.dta')
+df_cap900 = pd.read_stata('enaperu\\16_Cap900.dta')
+df_cap800 = pd.read_stata('enaperu\\15_Cap800.dta')
 
 # Group by CONGLOMERADO, NSELUA, and UA, and sum the P217_SUP_ha
 grouped_df = df.groupby(['CONGLOMERADO', 'NSELUA', 'UA'])['P217_SUP_ha'].sum().reset_index()
