@@ -20,14 +20,14 @@ def safe_convert_to_float(value):
         return 0.0
 
 # Use the raw URL of the .dta file
-raw_url = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/02_Cap200ab.dta'
-raw_url2 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/16_Cap900.dta'
-raw_url3 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/15_Cap800.dta'
-raw_url4 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/14_Cap700.dta'
-raw_url5 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/25_Cap1200d.dta'
-raw_url6 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/04_Cap200b_1.dta'
-raw_url7 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp'
-raw_url8 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/17_Cap1000.dta'
+raw_url = 'https://github.com/Fuba311/enaperu/raw/main/02_Cap200ab.dta'
+raw_url2 = 'https://github.com/Fuba311/enaperu/raw/main/16_Cap900.dta'
+raw_url3 = 'https://github.com/Fuba311/enaperu/raw/main/15_Cap800.dta'
+raw_url4 = 'https://github.com/Fuba311/enaperu/raw/main/14_Cap700.dta'
+raw_url5 = 'https://github.com/Fuba311/enaperu/raw/main/25_Cap1200d.dta'
+raw_url6 = 'https://github.com/Fuba311/enaperu/raw/main/04_Cap200b_1.dta'
+raw_url7 = 'https://github.com/Fuba311/enaperu/raw/main/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp'
+raw_url8 = 'https://github.com/Fuba311/enaperu/raw/main/17_Cap1000.dta'
 
 # Read the .dta file directly into a pandas dataframe
 df = pd.read_stata(raw_url)
