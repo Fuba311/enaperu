@@ -326,7 +326,7 @@ def calcular_precio_promedio_ponderado(df, cultivo, nivel_agregacion=None):
 
 # Inicializar la aplicación Dash con un tema de Bootstrap
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-server = app.server
+app = app.server
 
 app.layout = dbc.Container([
     dbc.Row(dbc.Col(html.H1("Visualizador Interactivo ENA 2022 Perú",
