@@ -1,0 +1,8 @@
+json
+pandas
+plotly
+dash==2.7.0
+dash-bootstrap-components==1.5.0
+flask_caching
+geopandas
+gunicorn
