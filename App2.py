@@ -3218,5 +3218,5 @@ def update_dias_contribution_table(departamento, provincia, distrito, region):
     return fig
 
 # Ejecutar aplicación
-if __name__ == '__main__':
-    app.run_server(debug=True)
+#if __name__ == '__main__':
+    #app.run_server(debug=True)
