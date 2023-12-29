@@ -338,7 +338,7 @@ app.layout = dbc.Container([
                         }),
                 width=12, className="mb-4 mt-4")),
 
-    dbc.Row(dbc.Col(html.P("Por Andrés Fuica",
+    dbc.Row(dbc.Col(html.P("Por Andrés Fuica (andresfuba@uc.cl)",
                         style={
                             'textAlign': 'center',
                             'fontFamily': '"Century Gothic", Arial, sans-serif',
@@ -347,7 +347,7 @@ app.layout = dbc.Container([
                         }),
                 width=12, className="mb-4")),
 
-    dbc.Row(dbc.Col(html.P("Para todos los gráficos, puede filtrar por Departamento, Provincia, Distrito y, solo para algunos, por Cultivo específico. Todos los gráficos junto con los datos utilizados para generarlos son descargables.",
+    dbc.Row(dbc.Col(html.P("Para todos los gráficos, puede filtrar por Región, Departamento, Provincia, Distrito y, solo para algunos, por Cultivo específico. Todos los gráficos junto con los datos utilizados para generarlos son descargables.",
                       style={
                           'textAlign': 'center',
                           'fontFamily': '"Century Gothic", Arial, sans-serif',
