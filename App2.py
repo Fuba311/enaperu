@@ -19,11 +19,20 @@ def safe_convert_to_float(value):
     except ValueError:
         return 0.0
 
+# Use the raw URL of the .dta file
+raw_url = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/02_Cap200ab.dta'
+raw_url2 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/16_Cap900.dta'
+raw_url3 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/15_Cap800.dta'
+raw_url4 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/14_Cap700.dta'
+raw_url5 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/25_Cap1200d.dta'
+raw_url6 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/04_Cap200b_1.dta'
+raw_url7 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp'
+raw_url8 = 'https://raw.githubusercontent.com/Fuba311/enaperu/main/17_Cap1000.dta'
 
-# Carga de datos
-df = pd.read_stata('enaperu\\02_Cap200ab.dta')
-df_cap900 = pd.read_stata('enaperu\\16_Cap900.dta')
-df_cap800 = pd.read_stata('enaperu\\15_Cap800.dta')
+# Read the .dta file directly into a pandas dataframe
+df = pd.read_stata(raw_url)
+df_cap900 = pd.read_stata(raw_url2)
+df_cap800 = pd.read_stata(raw_url3)
 
 # Group by CONGLOMERADO, NSELUA, and UA, and sum the P217_SUP_ha
 grouped_df = df.groupby(['CONGLOMERADO', 'NSELUA', 'UA'])['P217_SUP_ha'].sum().reset_index()
@@ -55,24 +64,24 @@ df_grouped = df_with_dummies.groupby(['CONGLOMERADO', 'NSELUA', 'UA']).sum().res
 df_cap800 = pd.merge(df_cap800, df_grouped, on=['CONGLOMERADO', 'NSELUA', 'UA'], how='left')
 
 # Load additional DataFrame
-df_cap700 = pd.read_stata('enaperu/14_Cap700.dta')
+df_cap700 = pd.read_stata(raw_url4)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
 df_cap700 = pd.merge(df_cap700, relevant_columns_df, on=['CONGLOMERADO', 'NSELUA', 'UA'], how='left')
-gdf = gpd.read_file('enaperu/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp')
+gdf = gpd.read_file(raw_url7)
 gdf = gdf.to_crs(epsg=4326)  # Ensure the GeoDataFrame is in WGS 84 coordinate system
 geojson = json.loads(gdf.to_json())
 
 # Load new data
-df_cap1200d = pd.read_stata('enaperu/25_Cap1200d.dta')
+df_cap1200d = pd.read_stata(raw_url5)
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha', 'FACTOR']].drop_duplicates()
 # Outer merge with df_cap1200d
 merged_df2 = pd.merge(df_cap1200d, relevant_columns_df, on=['CONGLOMERADO', 'NSELUA', 'UA', 'FACTOR'], how='outer')
 #merged_df2.to_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1760 - Características unidad agropecuaria en últimos 12 meses - maquinaria y equipo\\test.dta')
 
 # Load additional data
-df_prob = pd.read_stata('enaperu/04_Cap200b_1.dta')
+df_prob = pd.read_stata(raw_url6)
 
 # Rename 'P224B_NOM' to 'P204_NOM' in df_prob for merging
 df_prob.rename(columns={'P224B_NOM': 'P204_NOM'}, inplace=True)
@@ -85,7 +94,7 @@ loss_columns = ['P224E_1', 'P224E_2', 'P224E_3', 'P224E_4', 'P224E_5', 'P224E_6'
 df3[loss_columns] = df3[loss_columns].fillna('Pase')
 
 # Load additional DataFrame
-df_cap1000 = pd.read_stata('enaperu/17_Cap1000.dta')
+df_cap1000 = pd.read_stata(raw_url8)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
