@@ -20,19 +20,19 @@ def safe_convert_to_float(value):
         return 0.0
 
 # Use the raw URL of the .dta file
-raw_url = 'https://github.com/Fuba311/enaperu/raw/main/02_Cap200ab.dta'
-raw_url2 = 'https://github.com/Fuba311/enaperu/raw/main/16_Cap900.dta'
-raw_url3 = 'https://github.com/Fuba311/enaperu/raw/main/15_Cap800.dta'
-raw_url4 = 'https://github.com/Fuba311/enaperu/raw/main/14_Cap700.dta'
-raw_url5 = 'https://github.com/Fuba311/enaperu/raw/main/25_Cap1200d.dta'
-raw_url6 = 'https://github.com/Fuba311/enaperu/raw/main/04_Cap200b_1.dta'
+raw_url = 'https://github.com/Fuba311/enaperu/raw/main/02_Cap200ab.parquet'
+raw_url2 = 'https://github.com/Fuba311/enaperu/raw/main/16_Cap900.parquet'
+raw_url3 = 'https://github.com/Fuba311/enaperu/raw/main/15_Cap800.parquet'
+raw_url4 = 'https://github.com/Fuba311/enaperu/raw/main/14_Cap700.parquet'
+raw_url5 = 'https://github.com/Fuba311/enaperu/raw/main/25_Cap1200d.parquet'
+raw_url6 = 'https://github.com/Fuba311/enaperu/raw/main/04_Cap200b_1.parquet'
 raw_url7 = 'https://github.com/Fuba311/enaperu/raw/main/DEPARTAMENTOS_inei_geogpsperu_suyopomalia.shp'
-raw_url8 = 'https://github.com/Fuba311/enaperu/raw/main/17_Cap1000.dta'
+raw_url8 = 'https://github.com/Fuba311/enaperu/raw/main/17_Cap1000.parquet'
 
 # Read the .dta file directly into a pandas dataframe
-df = pd.read_stata(raw_url)
-df_cap900 = pd.read_stata(raw_url2)
-df_cap800 = pd.read_stata(raw_url3)
+df = pd.read_parquet(raw_url)
+df_cap900 = pd.read_parquet(raw_url2)
+df_cap800 = pd.read_parquet(raw_url3)
 
 # Group by CONGLOMERADO, NSELUA, and UA, and sum the P217_SUP_ha
 grouped_df = df.groupby(['CONGLOMERADO', 'NSELUA', 'UA'])['P217_SUP_ha'].sum().reset_index()
@@ -64,7 +64,7 @@ df_grouped = df_with_dummies.groupby(['CONGLOMERADO', 'NSELUA', 'UA']).sum().res
 df_cap800 = pd.merge(df_cap800, df_grouped, on=['CONGLOMERADO', 'NSELUA', 'UA'], how='left')
 
 # Load additional DataFrame
-df_cap700 = pd.read_stata(raw_url4)
+df_cap700 = pd.read_parquet(raw_url4)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
@@ -74,14 +74,14 @@ gdf = gdf.to_crs(epsg=4326)  # Ensure the GeoDataFrame is in WGS 84 coordinate s
 geojson = json.loads(gdf.to_json())
 
 # Load new data
-df_cap1200d = pd.read_stata(raw_url5)
+df_cap1200d = pd.read_parquet(raw_url5)
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha', 'FACTOR']].drop_duplicates()
 # Outer merge with df_cap1200d
 merged_df2 = pd.merge(df_cap1200d, relevant_columns_df, on=['CONGLOMERADO', 'NSELUA', 'UA', 'FACTOR'], how='outer')
 #merged_df2.to_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1760 - Características unidad agropecuaria en últimos 12 meses - maquinaria y equipo\\test.dta')
 
 # Load additional data
-df_prob = pd.read_stata(raw_url6)
+df_prob = pd.read_parquet(raw_url6)
 
 # Rename 'P224B_NOM' to 'P204_NOM' in df_prob for merging
 df_prob.rename(columns={'P224B_NOM': 'P204_NOM'}, inplace=True)
@@ -94,7 +94,7 @@ loss_columns = ['P224E_1', 'P224E_2', 'P224E_3', 'P224E_4', 'P224E_5', 'P224E_6'
 df3[loss_columns] = df3[loss_columns].fillna('Pase')
 
 # Load additional DataFrame
-df_cap1000 = pd.read_stata(raw_url8)
+df_cap1000 = pd.read_parquet(raw_url8)
 
 # Perform the merge
 relevant_columns_df = df[['CONGLOMERADO', 'NSELUA', 'UA', 'Total_Ha']].drop_duplicates()
@@ -208,7 +208,6 @@ def calcular_ventas_por_entidad(df):
 
     return ventas
 
-
 def calcular_destino_produccion(df, col_filter=None):
     categorias_destinos = {
         'P223_1': 'Mercado Local',
@@ -226,24 +225,23 @@ def calcular_destino_produccion(df, col_filter=None):
     totales_destinos['Mercado Regional y Agroindustria'] = 0
 
     for col, categoria in categorias_destinos.items():
-        filter_condition = (df[col].notna()) & (df[col] != 0)
+        filter_condition = (df[col] != 'nan') & (df[col] != '0.0')
 
         # Check if both 'Mercado Local' and 'Mercado Regional' are present and exclude such rows
         if categoria in ['Mercado Local', 'Mercado Regional']:
-            filter_condition &= ~((df['P223_1'].notna()) & (df['P223_1'] != 0) &
-                                  (df['P223_2'].notna()) & (df['P223_2'] != 0))
+            filter_condition &= ~((df['P223_1'] != 'nan') & (df['P223_1'] != '0.0') &
+                                  (df['P223_2'] != 'nan') & (df['P223_2'] != '0.0'))
 
         # Check if both 'Mercado Local' and 'Mercado Regional' are present and exclude such rows
         if categoria in ['Mercados de Lima']:
-            filter_condition &= ~((df['P223_1'].notna()) & (df['P223_1'] != 0) &
-                                  (df['P223_2'].notna()) & (df['P223_2'] != 0) &
-                                  (df['P223_5'].notna()) & (df['P223_5'] != 0))
-
+            filter_condition &= ~((df['P223_1'] != 'nan') & (df['P223_1'] != '0.0') &
+                                  (df['P223_2'] != 'nan') & (df['P223_2'] != '0.0') &
+                                  (df['P223_5'] != 'nan') & (df['P223_5'] != '0.0'))
 
         # Check if both 'Mercado Regional' and 'Agroindustria' are present and exclude such rows
         if categoria in ['Mercado Regional', 'Agroindustria']:
-            filter_condition &= ~((df['P223_2'].notna()) & (df['P223_2'] != 0) &
-                                  (df['P223_4'].notna()) & (df['P223_4'] != 0))
+            filter_condition &= ~((df['P223_2'] != 'nan') & (df['P223_2'] != '0.0') &
+                                  (df['P223_4'] != 'nan') & (df['P223_4'] != '0.0'))
 
         if col_filter:
             filter_condition &= (df['P204_NOM'] == col_filter)
@@ -252,9 +250,9 @@ def calcular_destino_produccion(df, col_filter=None):
 
     # Calculate 'Todo el país'
     todo_el_pais_filter = (
-            (df['P223_1'].notna()) & (df['P223_1'] != 0) &
-            (df['P223_2'].notna()) & (df['P223_2'] != 0) &
-            (df['P223_5'].notna()) & (df['P223_5'] != 0)
+            (df['P223_1'] != 'nan') & (df['P223_1'] != '0.0') &
+            (df['P223_2'] != 'nan') & (df['P223_2'] != '0.0') &
+            (df['P223_5'] != 'nan') & (df['P223_5'] != '0.0')
     )
 
     if col_filter:
@@ -264,8 +262,8 @@ def calcular_destino_produccion(df, col_filter=None):
 
     # Calculate 'Mercado Local y Regional'
     mercado_local_y_regional_filter = (
-            (df['P223_1'].notna()) & (df['P223_1'] != 0) &
-            (df['P223_2'].notna()) & (df['P223_2'] != 0)
+            (df['P223_1'] != 'nan') & (df['P223_1'] != '0.0') &
+            (df['P223_2'] != 'nan') & (df['P223_2'] != '0.0')
     )
     if col_filter:
         mercado_local_y_regional_filter &= (df['P204_NOM'] == col_filter)
@@ -277,8 +275,8 @@ def calcular_destino_produccion(df, col_filter=None):
 
     # Calculate 'Mercado Regional y Agroindustria'
     regional_agroindustria_filter = (
-            (df['P223_2'].notna()) & (df['P223_2'] != 0) &
-            (df['P223_4'].notna()) & (df['P223_4'] != 0)
+            (df['P223_2'] != 'nan') & (df['P223_2'] != '0.0') &
+            (df['P223_4'] != 'nan') & (df['P223_4'] != '0.0')
     )
 
     if col_filter:
@@ -291,7 +289,6 @@ def calcular_destino_produccion(df, col_filter=None):
                       list(categorias_destinos.values()) + ['Mercado Local y Regional', 'Local, Regional y Lima', 'Mercado Regional y Agroindustria']]
 
     return ordered_totals
-
 
 def calcular_ventas_chacra(df):
     venta_dentro_chacra_ton = df[df['P221_1'] == 'Dentro de la chacra']['equivalencia_kg'].sum()
