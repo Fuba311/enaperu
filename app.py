@@ -10,6 +10,7 @@ from collections import defaultdict
 import numpy as np
 from flask_caching import Cache
 import geopandas as gpd
+import os
 
 # Función para convertir de forma segura a float
 def safe_convert_to_float(value):
