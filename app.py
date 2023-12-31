@@ -524,13 +524,13 @@ app.layout = dbc.Container([
 redis_connection_string = os.environ.get('AZURE_REDIS_CONNECTIONSTRING')
 
 # Configure cache
-cache_config = {
+server.config.update({
     'CACHE_TYPE': 'RedisCache',
     'CACHE_REDIS_URL': redis_connection_string  # Use the connection string directly
-}
+})
 
-app.config.from_mapping(cache_config)
-cache = Cache(app)
+# Initialize cache
+cache = Cache(server)
 
 
 # Callbacks para actualizar menús y gráficos
