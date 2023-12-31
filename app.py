@@ -296,30 +296,6 @@ def calcular_ventas_chacra(df):
     return venta_dentro_chacra_ton, venta_fuera_chacra_ton
 
 
-def calcular_precio_promedio_ponderado(df, cultivo, nivel_agregacion=None):
-    # Filtrar el DataFrame por el cultivo seleccionado y asegurarse de que no hay valores NaN en las columnas relevantes.
-    df_filtrado = df[(df['P204_NOM'] == cultivo) &
-                     (df['P220_1_PRE_KG'].notna()) &
-                     (df['FACTOR'].notna())]
-
-    # Convertir el 'FACTOR' a float para evitar problemas en la multiplicación.
-    df_filtrado['FACTOR'] = df_filtrado['FACTOR'].astype(float)
-
-    # If nivel_agregacion is None, return a DataFrame with a single column
-    if nivel_agregacion is None:
-        precio_total = (df_filtrado['P220_1_PRE_KG'] * df_filtrado['FACTOR']).sum()
-        factor_total = df_filtrado['FACTOR'].sum()
-        precio_ponderado = precio_total / factor_total if factor_total != 0 else 0
-        return pd.DataFrame({'Precio Promedio Ponderado': [precio_ponderado]})
-
-    # Otherwise, perform the groupby operation and ensure a DataFrame is returned
-    else:
-        precios = df_filtrado.groupby(nivel_agregacion)['P220_1_PRE_KG'].apply(
-            lambda x: (x * df_filtrado.loc[x.index, 'FACTOR']).sum() / df_filtrado.loc[x.index, 'FACTOR'].sum()
-        ).reset_index()
-        precios.columns = [nivel_agregacion, 'Precio Promedio Ponderado']
-        return precios
-
 
 # Inicializar la aplicación Dash con un tema de Bootstrap
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -413,7 +389,6 @@ app.layout = dbc.Container([
                 id='graph-selection-dropdown',
                 options=[
                     {'label': 'Producción - Uso y Destinos de Venta', 'value': 'prod_uso_venta'},
-                    {'label': 'Estadísticas de Precios', 'value': 'precio_stats'},
                     {'label': 'Pérdidas de Cultivos y Jornaleros', 'value': 'cultivo_losses'},
                     {'label': 'Servicios Financieros', 'value': 'servicios_financieros'},
                     {'label': 'Asociatividad', 'value': 'asociatividad'},
@@ -443,15 +418,6 @@ app.layout = dbc.Container([
         id="collapse"
     ),
 
-    dbc.Collapse(
-        html.Div(id='precio-promedio-ponderado-container'),
-        id="precio-text-collapse",
-    ),
-
-    dbc.Collapse(
-        dcc.Graph(id='precio-promedio-ponderado-grafico'),
-        id="precio-grafico-collapse",
-    ),
 
     # Add the new graph in the corresponding dbc.Collapse section
     dbc.Collapse(
@@ -553,14 +519,17 @@ app.layout = dbc.Container([
 
 ], fluid=True)
 
-# Configure cache
-cache = Cache(app.server, config={
-    'CACHE_TYPE': 'filesystem',  # Using filesystem cache
-    'CACHE_DIR': 'cache-directory'  # Path to the cache directory
-})
+# Retrieve the connection string from the environment variable
+redis_connection_string = os.environ.get('AZURE_REDIS_CONNECTIONSTRING')
 
-# Define the timeout for cached data (in seconds)
-timeout = 60 * 60  # 1 hour, for example
+# Configure cache
+cache_config = {
+    'CACHE_TYPE': 'RedisCache',
+    'CACHE_REDIS_URL': redis_connection_string  # Use the connection string directly
+}
+
+app.config.from_mapping(cache_config)
+cache = Cache(app)
 
 
 # Callbacks para actualizar menús y gráficos
@@ -589,6 +558,7 @@ def set_distrito_options(selected_provincia):
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_chart(selected_departamento, selected_provincia, selected_distrito, selected_cultivo, toggle_state, region):
     # Filtrado condicional basado en las selecciones del usuario
     filtered_df = df.copy()
@@ -689,6 +659,7 @@ def update_chart(selected_departamento, selected_provincia, selected_distrito, s
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_ventas_chacra_chart(selected_departamento, selected_provincia, selected_distrito, selected_cultivo,
                                toggle_state, region):
     filtered_df = df.copy()
@@ -823,6 +794,7 @@ def update_ventas_entidad_chart(selected_departamento, selected_provincia, selec
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_destino_produccion_chart(selected_departamento, selected_provincia, selected_distrito, selected_cultivo, toggle_state, region):
     filtered_df = df.copy()
     if selected_departamento:
@@ -874,129 +846,10 @@ def update_destino_produccion_chart(selected_departamento, selected_provincia, s
     return fig
 
 
-@app.callback(
-    [Output('precio-promedio-ponderado-container', 'children'),
-     Output('precio-promedio-ponderado-grafico', 'figure')],
-    [Input('departamento-dropdown', 'value'),
-     Input('provincia-dropdown', 'value'),
-     Input('distrito-dropdown', 'value'),
-     Input('cultivo-dropdown', 'value'),
-     Input('chart-toggle', 'value')]
-)
-def update_precio_promedio_ponderado(departamento, provincia, distrito, cultivo, toggle_state):
-    if not cultivo:
-        return "Seleccione un cultivo para ver el precio promedio ponderado.", go.Figure()
-
-    df_filtrado = df[(df['P204_NOM'] == cultivo) & (df['P220_1_PRE_KG'].notna())]
-
-    if 'toggle' in toggle_state:
-        nivel_agregacion = None
-        area_value = None
-
-        if distrito:
-            nivel_agregacion = 'NOMBREDI'
-            area_value = distrito
-        elif provincia:
-            nivel_agregacion = 'NOMBREPV'
-            area_value = provincia
-        elif departamento:
-            nivel_agregacion = 'NOMBREDD'
-            area_value = departamento
-
-        # Calculate weighted average price for each hectare range
-        hectare_range_data = []
-        for lower, upper in hectare_ranges:
-            if nivel_agregacion:
-                range_df = df_filtrado[(df_filtrado[nivel_agregacion] == area_value) &
-                                       (df_filtrado['P217_SUP_ha'] >= lower) &
-                                       (df_filtrado['P217_SUP_ha'] < upper)]
-            else:
-                # If no specific area is selected, use the entire filtered dataset
-                range_df = df_filtrado[(df_filtrado['P217_SUP_ha'] >= lower) &
-                                       (df_filtrado['P217_SUP_ha'] < upper)]
-                area_value = "Nacional"
-
-            precio_ponderado_df = calcular_precio_promedio_ponderado(range_df, cultivo, nivel_agregacion=None)
-            precio_ponderado = precio_ponderado_df.iloc[0][
-                'Precio Promedio Ponderado'] if not precio_ponderado_df.empty else 0
-            hectare_range_data.append({
-                'Hectare Range': f'{lower}-{upper}',
-                'Precio Promedio Ponderado': precio_ponderado
-            })
-
-        plot_df = pd.DataFrame(hectare_range_data)
-        fig = px.bar(
-            plot_df,
-            x='Hectare Range',
-            y='Precio Promedio Ponderado',
-            title=f'Precio Promedio Ponderado por kg para {cultivo} en {area_value}',
-            text_auto=True
-        )
-        return "", fig
-
-    else:
-        if cultivo and not departamento and not provincia and not distrito:
-            precios_por_departamento = calcular_precio_promedio_ponderado(df_filtrado, cultivo, 'NOMBREDD')
-            precios_por_departamento['Precio Promedio Ponderado'] = precios_por_departamento[
-                'Precio Promedio Ponderado'].round(3)
-
-            fig = px.bar(
-                precios_por_departamento,
-                x='NOMBREDD',
-                y='Precio Promedio Ponderado',
-                title=f'Precio Promedio Ponderado por kg para {cultivo} en cada Departamento'
-            )
-            fig.update_layout(plot_bgcolor='white', xaxis_title='Departamento', yaxis_title='Precio Promedio Ponderado')
-            return "", fig
-
-        nivel_agregacion = 'NOMBREDD' if departamento else 'NOMBREPV' if provincia else 'NOMBREDI'
-        title = ""
-        if departamento:
-            nivel_agregacion = 'NOMBREDI' if provincia else 'NOMBREPV'
-            title = f'Precio Promedio Ponderado por kg para {cultivo} en Provincias de {departamento}'
-            if provincia:
-                nivel_agregacion = 'NOMBREDI'
-                title = f'Precio Promedio Ponderado por kg para {cultivo} en Distritos de {provincia}'
-
-        precios = calcular_precio_promedio_ponderado(df_filtrado, cultivo, nivel_agregacion)
-        precios['Precio Promedio Ponderado'] = precios['Precio Promedio Ponderado'].round(3)
-
-        if nivel_agregacion:
-            fig = px.bar(
-                precios,
-                x=nivel_agregacion,
-                y='Precio Promedio Ponderado',
-                title=title
-            )
-            fig.update_layout(plot_bgcolor='white', xaxis_title=nivel_agregacion,
-                              yaxis_title='Precio Promedio Ponderado')
-            data_table = dash_table.DataTable(
-                columns=[{"name": nivel_agregacion, "id": nivel_agregacion},
-                         {"name": "Precio Promedio Ponderado", "id": "Precio Promedio Ponderado"}],
-                data=precios.to_dict('records'),
-                style_table={'height': '300px', 'overflowY': 'auto'}
-            )
-            return data_table, fig
-        else:
-            precio_ponderado_nacional = df_filtrado['P220_1_PRE_KG'].mean().round(3)
-            fig = go.Figure(go.Bar(
-                x=['Nacional'],
-                y=[precio_ponderado_nacional],
-                name='Nacional'
-            ))
-            fig.update_layout(
-                title_text=f'Precio Promedio Ponderado por kg para {cultivo} a nivel nacional',
-                xaxis_title='Ubicación',
-                yaxis_title='Precio Promedio Ponderado'
-            )
-            return "", fig
-
 
 @app.callback(
     [
         Output("collapse", "is_open"),
-        Output("precio-text-collapse", "is_open"),
-        Output("precio-grafico-collapse", "is_open"),
         Output("acceso-credito-collapse", "is_open"),
         Output("asociatividad-collapse", "is_open"),
         Output("insumos-collapse", "is_open"),
@@ -1007,11 +860,10 @@ def update_precio_promedio_ponderado(departamento, provincia, distrito, cultivo,
     ],
     [Input("graph-selection-dropdown", "value")]
 )
+@cache.memoize(timeout=60 * 60)
 def update_graph_visibility(selected_graph_set):
     return [
         selected_graph_set == 'prod_uso_venta',  # Collapse for Producción - Uso y Destinos de Venta
-        selected_graph_set == 'precio_stats',    # Collapse for Estadísticas de Precios
-        selected_graph_set == 'precio_stats',    # Assuming this is for text and graphic stats
         selected_graph_set == 'servicios_financieros',  # Collapse for Servicios Financieros
         selected_graph_set == 'asociatividad',          # Collapse for Asociatividad
         selected_graph_set == 'uso_insumos',            # Collapse for Uso de insumos
@@ -1029,6 +881,7 @@ def update_graph_visibility(selected_graph_set):
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_acceso_credito_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df_cap900 based on selected area
     filtered_df = df_cap900.copy()
@@ -1091,6 +944,7 @@ def update_acceso_credito_chart(departamento, provincia, distrito, toggle_state,
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_obtencion_credito_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df_cap900 based on selected area
     filtered_df = df_cap900.copy()
@@ -1152,6 +1006,7 @@ def update_obtencion_credito_chart(departamento, provincia, distrito, toggle_sta
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_seguro_agricola_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df_cap900 based on selected area
     filtered_df = df_cap900.copy()
@@ -1213,6 +1068,7 @@ def update_seguro_agricola_chart(departamento, provincia, distrito, toggle_state
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_proveedor_seguro_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df_cap900 based on selected area
     filtered_df = df_cap900.copy()
@@ -1319,6 +1175,7 @@ def update_entidad_credito_chart(departamento, provincia, distrito, toggle_state
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_razones_rechazo_credito_chart(departamento, provincia, distrito, toggle_state, region):
     filtered_df = df_cap900.copy()
     if departamento:
@@ -1440,6 +1297,7 @@ def update_asociatividad_chart(departamento, provincia, distrito, toggle_state, 
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_razones_no_asociatividad_chart(departamento, provincia, distrito, toggle_state, region):
     filtered_df = df_cap800.copy()
     if departamento:
@@ -1515,6 +1373,7 @@ def update_razones_no_asociatividad_chart(departamento, provincia, distrito, tog
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_selling_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter DataFrame based on selected criteria
     filtered_df = df.copy()
@@ -1599,6 +1458,7 @@ def update_selling_chart(selected_departamento, selected_provincia, selected_dis
         Input('region-dropdown', 'value')
     ]
 )
+@cache.memoize(timeout=60 * 60)
 def update_insumos_usage_chart(departamento, provincia, distrito, toggle_state, selected_insumos, region):
     # Load and merge data
     df_cap300ab = pd.read_stata('C:\\UC\\RIMISP\\Encuestas Perú\\2019\\2022\\1744 - BPA\\08_Cap300ab.dta')
@@ -1717,6 +1577,7 @@ def update_capacitacion_chart(departamento, provincia, distrito, toggle_state, r
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_asistencia_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df_cap700 based on selected area
     filtered_df = df_cap700.copy()
@@ -1775,6 +1636,7 @@ def update_asistencia_chart(departamento, provincia, distrito, toggle_state, reg
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_cantidad_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter df based on selected area
     filtered_df = df.copy()  # Replace 'df' with your actual DataFrame variable
@@ -1938,6 +1800,7 @@ def update_map(cultivo, data_type):
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_maquinaria_equipos_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter based on selected area
     filtered_df = merged_df2.copy()
@@ -1999,6 +1862,7 @@ def update_maquinaria_equipos_chart(departamento, provincia, distrito, toggle_st
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_ua_maquinaria_equipos_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter based on selected area
     filtered_df = merged_df2.copy()
@@ -2068,6 +1932,7 @@ def update_ua_maquinaria_equipos_chart(departamento, provincia, distrito, toggle
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_maquinaria_equipos_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter based on selected area
     filtered_df = merged_df2.copy()
@@ -2139,6 +2004,7 @@ def update_maquinaria_equipos_chart(departamento, provincia, distrito, toggle_st
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_maquinaria_obtencion_chart(departamento, provincia, distrito, toggle_state, region):
     # Filter based on selected area
     filtered_df = merged_df2.copy()
@@ -2207,6 +2073,7 @@ def update_maquinaria_obtencion_chart(departamento, provincia, distrito, toggle_
      Input('distrito-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_sales_proportion_table(departamento, provincia, distrito, region):
     # Filter based on selected area
     filtered_df = df.copy()
@@ -2284,6 +2151,7 @@ def update_sales_proportion_table(departamento, provincia, distrito, region):
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_problemas_cultivo_chart(selected_departamento, selected_provincia, selected_distrito, selected_cultivo, toggle_state, region):
     # Filter based on selections
     filtered_df = df.copy()
@@ -2421,6 +2289,7 @@ def update_crops_affected_reasons_chart(selected_departamento, selected_provinci
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_jornaleros_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter based on selections
     filtered_df = df_cap1000.copy()
@@ -2473,6 +2342,7 @@ def update_jornaleros_chart(selected_departamento, selected_provincia, selected_
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_jornaleros_detail_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter based on selections
     filtered_df = df_cap1000.copy()
@@ -2542,6 +2412,7 @@ def update_jornaleros_detail_chart(selected_departamento, selected_provincia, se
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_employed_people_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter based on selections
     filtered_df = df_cap1000.copy()
@@ -2573,6 +2444,7 @@ def update_employed_people_chart(selected_departamento, selected_provincia, sele
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_employed_peoples_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter based on selections
     filtered_df = df_cap1000.copy()
@@ -2615,6 +2487,7 @@ def update_employed_peoples_chart(selected_departamento, selected_provincia, sel
      Input('cultivo-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_venta_contribution_table(departamento, provincia, distrito, cultivo, region):
     # Filter based on selected area
     filtered_df = df.copy()
@@ -2710,6 +2583,7 @@ def update_venta_contribution_table(departamento, provincia, distrito, cultivo, 
      Input('cultivo-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_proportion_category_table(departamento, provincia, distrito, cultivo, region):
     # Filter based on selected area
     filtered_df = df.copy()
@@ -2828,6 +2702,7 @@ merged_df2 = pd.merge(merged_df2, unique_productions[['CONGLOMERADO', 'NSELUA', 
      Input('distrito-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_proportions_owned_maquinaria_table(departamento, provincia, distrito, region):
     # Assume merged_df2 is already merged with sales_proportion as shown in previous steps
 
@@ -2914,6 +2789,7 @@ def update_proportions_owned_maquinaria_table(departamento, provincia, distrito,
      Input('distrito-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_maquinaria_sales_proportion_table(departamento, provincia, distrito, region):
     # Filter based on selected area, assume merged_df2 already has sales_proportion merged in it
     filtered_df = merged_df2.copy()
@@ -2992,6 +2868,7 @@ def update_maquinaria_sales_proportion_table(departamento, provincia, distrito, 
      Input('distrito-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_proportions_owned_tractor_table(departamento, provincia, distrito, region):
     # Assume merged_df2 is already merged with sales_proportion as shown in previous steps
 
@@ -3076,6 +2953,7 @@ def update_proportions_owned_tractor_table(departamento, provincia, distrito, re
      Input('chart-toggle', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_worked_days_chart(selected_departamento, selected_provincia, selected_distrito, toggle_state, region):
     # Filter based on selections
     filtered_df = df_cap1000.copy()
@@ -3142,6 +3020,7 @@ df_cap1000 = pd.merge(df_cap1000, unique_productions[['CONGLOMERADO', 'NSELUA', 
      Input('distrito-dropdown', 'value'),
      Input('region-dropdown', 'value')]
 )
+@cache.memoize(timeout=60 * 60)
 def update_dias_contribution_table(departamento, provincia, distrito, region):
     # Filter based on selected area
     filtered_df = df_cap1000.copy()
